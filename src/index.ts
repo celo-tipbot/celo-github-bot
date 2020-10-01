@@ -1,4 +1,8 @@
 import { Application } from 'probot' // eslint-disable-line no-unused-vars
+import { newKit } from "@celo/contractkit";
+interface OrgConfig {
+  host: string
+}
 
 export const app = (app: Application) => {
   app.on('issues.opened', async (context) => {
@@ -7,7 +11,10 @@ export const app = (app: Application) => {
   })
 
   app.on('issue_comment', async (context) => {
-    console.log(context.payload.comment)
+    // @ts-ignore
+    const config: OrgConfig = await context.config("celo-tipbot.yml")
+    const kit = newKit(config.host)
+    console.log((await kit.web3.eth.getBlock('latest')).number)
 
   })
   // For more information on building apps:
