@@ -1,7 +1,19 @@
 import { Application } from 'probot' // eslint-disable-line no-unused-vars
 import { newKit } from "@celo/contractkit";
+import { WebhookEvent } from "@octokit/webhooks/dist-types/types";
+import { EventPayloads } from "@octokit/webhooks/dist-types/generated/event-payloads";
 interface OrgConfig {
   host: string
+}
+
+interface Command {
+  sender: string
+  receiver: string
+  value: number
+}
+
+function parseCommand(_context: WebhookEvent<EventPayloads.WebhookPayloadIssueComment>): Command | null  {
+  return null
 }
 
 export const app = (app: Application) => {
@@ -14,7 +26,9 @@ export const app = (app: Application) => {
     // @ts-ignore
     const config: OrgConfig = await context.config("celo-tipbot.yml")
     const kit = newKit(config.host)
+    const command = parseCommand(context)
     console.log((await kit.web3.eth.getBlock('latest')).number)
+    console.log('Parsed Command', command)
 
   })
   // For more information on building apps:
