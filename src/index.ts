@@ -1,5 +1,5 @@
 import { Application } from 'probot' // eslint-disable-line no-unused-vars
-import { newKit } from "@celo/contractkit";
+import { Address, ContractKit, newKit } from "@celo/contractkit";
 import { WebhookEvent } from "@octokit/webhooks/dist-types/types";
 import { EventPayloads } from "@octokit/webhooks/dist-types/generated/event-payloads";
 interface OrgConfig {
@@ -12,8 +12,24 @@ interface Command {
   value: number
 }
 
+
 function parseCommand(_context: WebhookEvent<EventPayloads.WebhookPayloadIssueComment>): Command | null  {
   return null
+}
+
+async function getCeloAccountForGithubUsername(username: string): Address | null {
+  return null
+}
+
+async function handleCommand(kit: ContractKit, command: Command) {
+  const senderAddress = await getCeloAccountForGithubUsername(command.sender)
+  const recipientAddress = await getCeloAccountForGithubUsername(command.receiver)
+
+  if (senderAddress && recipientAddress) {
+    console.log('I can do the transfer')
+  } else {
+    console.log("I can't do the transfer")
+  }
 }
 
 export const app = (app: Application) => {
@@ -27,8 +43,11 @@ export const app = (app: Application) => {
     const config: OrgConfig = await context.config("celo-tipbot.yml")
     const kit = newKit(config.host)
     const command = parseCommand(context)
-    console.log((await kit.web3.eth.getBlock('latest')).number)
-    console.log('Parsed Command', command)
+    if (command) {
+      await handleCommand(kit, command)
+    } else {
+      console.info("Can't parse the command")
+    }
 
   })
   // For more information on building apps:
