@@ -9,11 +9,25 @@ interface OrgConfig {
   host: string
 }
 
-interface Command {
+enum CommandType {
+  Transfer = 'Transfer',
+  Register = 'Register'
+}
+
+interface TransferCommand {
+  type: CommandType.Transfer
   sender: string
   receiver: string
   value: number
 }
+
+interface RegisterCommand {
+  type: CommandType.Register
+  account: string
+  identifier: string
+}
+
+type Command = TransferCommand | RegisterCommand
 
 
 function parseCommand(_context: WebhookEvent<EventPayloads.WebhookPayloadIssueComment>): Command | null  {
@@ -25,14 +39,26 @@ async function getCeloAccountForGithubUsername(_username: string): Promise<Addre
 }
 
 async function handleCommand(_kit: ContractKit, command: Command) {
-  const senderAddress = await getCeloAccountForGithubUsername(command.sender)
-  const recipientAddress = await getCeloAccountForGithubUsername(command.receiver)
 
-  if (senderAddress && recipientAddress) {
-    console.log('I can do the transfer')
-  } else {
-    console.log("I can't do the transfer")
+  switch (command.type) {
+    case CommandType.Transfer:
+      const senderAddress = await getCeloAccountForGithubUsername(command.sender)
+      const recipientAddress = await getCeloAccountForGithubUsername(command.receiver)
+
+      if (senderAddress && recipientAddress) {
+        console.log('I can do the transfer')
+      } else {
+        console.log("I can't do the transfer")
+      }
+      break;
+    case CommandType.Register:
+      console.log('Register this identifier')
+      break;
+    default:
+      break;
   }
+
+
 }
 
 export const app = (app: Application) => {
