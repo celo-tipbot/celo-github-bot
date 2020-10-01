@@ -2,6 +2,9 @@ import { Application } from 'probot' // eslint-disable-line no-unused-vars
 import { Address, ContractKit, newKit } from "@celo/contractkit";
 import { WebhookEvent } from "@octokit/webhooks/dist-types/types";
 import { EventPayloads } from "@octokit/webhooks/dist-types/generated/event-payloads";
+import { AccountUtils } from "@celo/utils";
+import { privateKeyToAddress } from '@celo/utils/lib/address'
+
 interface OrgConfig {
   host: string
 }
@@ -17,11 +20,11 @@ function parseCommand(_context: WebhookEvent<EventPayloads.WebhookPayloadIssueCo
   return null
 }
 
-async function getCeloAccountForGithubUsername(username: string): Address | null {
-  return null
+async function getCeloAccountForGithubUsername(_username: string): Promise<Address | null> {
+  return Promise.resolve(null)
 }
 
-async function handleCommand(kit: ContractKit, command: Command) {
+async function handleCommand(_kit: ContractKit, command: Command) {
   const senderAddress = await getCeloAccountForGithubUsername(command.sender)
   const recipientAddress = await getCeloAccountForGithubUsername(command.receiver)
 
@@ -42,6 +45,13 @@ export const app = (app: Application) => {
     // @ts-ignore
     const config: OrgConfig = await context.config("celo-tipbot.yml")
     const kit = newKit(config.host)
+    const key = await AccountUtils.generateKeys(process.env.MNEMONIC!)
+    const address = privateKeyToAddress(key.privateKey)
+    kit.addAccount(key.privateKey)
+    app.log.info({
+      address,
+      balance: await kit.web3.eth.getBalance(address)
+    })
     const command = parseCommand(context)
     if (command) {
       await handleCommand(kit, command)
