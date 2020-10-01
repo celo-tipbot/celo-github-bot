@@ -1,6 +1,6 @@
 # celo-github-bot
 
-> A GitHub App built with [Probot](https://github.com/probot/probot) that A Github bot that allows users to tip each other in cUSD
+> A GitHub App built with [Probot](https://github.com/probot/probot) that A Github bot that allows users to tip each other in cUSD.
 
 ## Setup
 
