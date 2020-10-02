@@ -3,7 +3,7 @@
 
 import nock from 'nock'
 // Requiring our app implementation
-import { app as myProbotApp } from '../src'
+import { app } from '../src'
 import { Probot, ProbotOctokit } from 'probot'
 // Requiring our fixtures
 import payload from './fixtures/issues.opened.json'
@@ -13,7 +13,7 @@ const path = require('path')
 
 const privateKey = fs.readFileSync(path.join(__dirname, 'fixtures/mock-cert.pem'), 'utf-8')
 
-describe('My Probot app', () => {
+describe('The Celo Tipbot', () => {
   let probot: any
 
   beforeEach(() => {
@@ -28,7 +28,7 @@ describe('My Probot app', () => {
       })
     })
     // Load our app into probot
-    probot.load(myProbotApp)
+    probot.load(app)
   })
 
   test('creates a comment when an issue is opened', async (done) => {
