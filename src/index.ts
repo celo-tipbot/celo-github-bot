@@ -3,13 +3,15 @@ import { Address, ContractKit, newKit } from "@celo/contractkit";
 
 import { Command, CommandTip, CommandRegister } from './command'
 import { parseGitHubComment } from './parse'
+import { AccountUtils } from "@celo/utils";
+import { privateKeyToAddress } from '@celo/utils/lib/address'
 
 interface OrgConfig {
   host: string
 }
 
 async function getCeloAccountForGithubUsername(_username: string): Promise<Address | null> {
-  return null
+  return Promise.resolve(null)
 }
 
 async function handleCommand(_kit: ContractKit, command: Command) {
@@ -49,13 +51,19 @@ export const app = (app: Application) => {
     // @ts-ignore
     const config: OrgConfig = await context.config("celo-tipbot.yml")
     const kit = newKit(config.host)
+    const key = await AccountUtils.generateKeys(process.env.MNEMONIC!)
+    const address = privateKeyToAddress(key.privateKey)
+    kit.addAccount(key.privateKey)
+    app.log.info({
+      address,
+      balance: await kit.web3.eth.getBalance(address)
+    })
     const result = parseGitHubComment(context.payload.comment)
     if (result.ok) {
       await handleCommand(kit, result.result)
     } else {
       console.info("Can't parse the command")
     }
-
   })
   // For more information on building apps:
   // https://probot.github.io/docs/
