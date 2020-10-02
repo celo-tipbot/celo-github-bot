@@ -1,27 +1,30 @@
 import { Application } from 'probot' // eslint-disable-line no-unused-vars
 import { Address, ContractKit, newKit } from "@celo/contractkit";
-import { WebhookEvent } from "@octokit/webhooks/dist-types/types";
-import { EventPayloads } from "@octokit/webhooks/dist-types/generated/event-payloads";
+
+import { Command, CommandTip, CommandRegister } from './command'
+import { parseGitHubComment } from './parse'
+
 interface OrgConfig {
   host: string
 }
 
-interface Command {
-  sender: string
-  receiver: string
-  value: number
-}
-
-
-function parseCommand(_context: WebhookEvent<EventPayloads.WebhookPayloadIssueComment>): Command | null  {
+async function getCeloAccountForGithubUsername(_username: string): Promise<Address | null> {
   return null
 }
 
-async function getCeloAccountForGithubUsername(username: string): Address | null {
-  return null
+async function handleCommand(_kit: ContractKit, command: Command) {
+  switch (command.type) {
+    case 'tip':
+      handleTip(_kit, command)
+      break;
+    case 'register':
+      handleRegister(_kit, command)
+      break;
+  }
 }
 
-async function handleCommand(kit: ContractKit, command: Command) {
+async function handleTip(_kit: ContractKit, command: CommandTip) {
+  console.log('Trying to perform tip:', command)
   const senderAddress = await getCeloAccountForGithubUsername(command.sender)
   const recipientAddress = await getCeloAccountForGithubUsername(command.receiver)
 
@@ -30,6 +33,10 @@ async function handleCommand(kit: ContractKit, command: Command) {
   } else {
     console.log("I can't do the transfer")
   }
+}
+
+async function handleRegister(_kit: ContractKit, command: CommandRegister) {
+  console.log('Trying to perform register:', command)
 }
 
 export const app = (app: Application) => {
@@ -42,9 +49,9 @@ export const app = (app: Application) => {
     // @ts-ignore
     const config: OrgConfig = await context.config("celo-tipbot.yml")
     const kit = newKit(config.host)
-    const command = parseCommand(context)
-    if (command) {
-      await handleCommand(kit, command)
+    const result = parseGitHubComment(context.payload.comment)
+    if (result.ok) {
+      await handleCommand(kit, result.result)
     } else {
       console.info("Can't parse the command")
     }
