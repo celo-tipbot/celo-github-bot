@@ -5,27 +5,32 @@ import { Command, CommandTip, CommandRegister } from './command'
 import { parseGitHubComment } from './parse'
 import { AccountUtils } from "@celo/utils";
 import { privateKeyToAddress } from '@celo/utils/lib/address'
-
+import * as firebase from "firebase";
 interface OrgConfig {
   host: string
+}
+
+interface Context {
+  kit: ContractKit
+  database: firebase.firestore.Firestore
 }
 
 async function getCeloAccountForGithubUsername(_username: string): Promise<Address | null> {
   return Promise.resolve(null)
 }
 
-async function handleCommand(_kit: ContractKit, command: Command) {
+async function handleCommand(context: Context, command: Command) {
   switch (command.type) {
     case 'tip':
-      handleTip(_kit, command)
+      handleTip(context, command)
       break;
     case 'register':
-      handleRegister(_kit, command)
+      handleRegister(context, command)
       break;
   }
 }
 
-async function handleTip(_kit: ContractKit, command: CommandTip) {
+async function handleTip(_context: Context, command: CommandTip) {
   console.log('Trying to perform tip:', command)
   const senderAddress = await getCeloAccountForGithubUsername(command.sender)
   const recipientAddress = await getCeloAccountForGithubUsername(command.receiver)
@@ -37,11 +42,26 @@ async function handleTip(_kit: ContractKit, command: CommandTip) {
   }
 }
 
-async function handleRegister(_kit: ContractKit, command: CommandRegister) {
+async function handleRegister(_context: Context, command: CommandRegister) {
   console.log('Trying to perform register:', command)
 }
 
 export const app = (app: Application) => {
+
+  const firebaseConfig = {
+    apiKey: process.env.FIREBASE_APIKEY,
+    authDomain: process.env.FIREBASE_AUTHDOMAIN,
+    databaseURL: process.env.FIREBASE_DATABASEURL,
+    projectId: process.env.FIREBASE_PROJECTID,
+    storageBucket: process.env.FIREBASE_STORAGEBUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGINGSENDERID,
+    appId: process.env.FIREBASE_APPID,
+    measurementId: process.env.FIREBASE_MEASUREMENTID
+  };
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+
+  const database = firebase.firestore()
   app.on('issues.opened', async (context) => {
     const issueComment = context.issue({ body: 'Thanks for opening this issue!' })
     await context.github.issues.createComment(issueComment)
@@ -60,7 +80,7 @@ export const app = (app: Application) => {
     })
     const result = parseGitHubComment(context.payload.comment)
     if (result.ok) {
-      await handleCommand(kit, result.result)
+      await handleCommand({ kit, database }, result.result)
     } else {
       console.info("Can't parse the command")
     }
