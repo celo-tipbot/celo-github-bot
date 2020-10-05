@@ -11,4 +11,9 @@ export interface CommandRegister {
   address: string
 }
 
-export type Command = CommandTip | CommandRegister
+export interface CommandRedeem {
+  type: 'redeem',
+  sender: string
+}
+
+export type Command = CommandTip | CommandRegister | CommandRedeem

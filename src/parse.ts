@@ -38,6 +38,18 @@ function parseRegister(sender: string, processor: TokenProcessor): Result<Comman
   }
 }
 
+function parseRedeem(sender: string, processor: TokenProcessor): Result<Command, Error> {
+  const result = processor.finish()
+  if (result.ok) {
+    return Ok({
+      type: 'redeem',
+      sender
+    })
+  } else {
+    return result
+  }
+}
+
 export function parseGitHubComment(comment: EventPayloads.WebhookPayloadIssueCommentComment): Result<Command, Error> {
   const sender = comment.user.login
 
@@ -52,6 +64,8 @@ export function parseGitHubComment(comment: EventPayloads.WebhookPayloadIssueCom
     case 'REGISTER':
       return parseRegister(sender, processor)
       break;
+    case 'REDEEM':
+      return parseRedeem(sender, processor)
     default:
       return Err(new Error ('Unknown tipbot command'))
   }

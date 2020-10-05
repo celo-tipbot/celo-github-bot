@@ -42,6 +42,9 @@ async function handleCommand(context: Context, command: Command) {
     case "register":
       handleRegister(context, command);
       break;
+    case 'redeem':
+      handleRedeem(context, command.sender)
+      break
   }
 }
 
@@ -162,9 +165,6 @@ async function handleRegister(context: Context, command: CommandRegister) {
       account: command.address,
       identifier: `github://${command.sender}`,
     });
-
-  // TODO: Remove this
-  await handleRedeem(context, command.sender);
 }
 
 async function handleRedeem(context: Context, username: string) {
@@ -178,6 +178,11 @@ async function handleRedeem(context: Context, username: string) {
   const stableToken = await context.kit.contracts.getStableToken();
   const escrows = context.database.collection("escrows");
   const escrowsForUser = await escrows.where("receiver", "==", username).get();
+
+  if (escrowsForUser.empty) {
+    await context.reply(`Error: No escrows to redeem for ${username}`)
+    return
+  }
 
   // TODO: Make this atomic
   await Promise.all(
