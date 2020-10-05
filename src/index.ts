@@ -15,6 +15,8 @@ interface OrgConfig {
 interface Context {
   kit: ContractKit
   database: firebase.firestore.Firestore
+  reply: (text: string) => Promise<any>,
+  commentId: string
 }
 
 async function getCeloAccountForGithubUsername(context: Context, username: string): Promise<Result<Address, Error>> {
@@ -38,23 +40,59 @@ async function handleCommand(context: Context, command: Command) {
   }
 }
 
+
+async function transfer(context: Context, sender: Address, receiver: Address, value: string) {
+  const stableToken = await context.kit.contracts.getStableToken()
+  const approval = await stableToken.allowance(sender, context.kit.defaultAccount!)
+  const transferValue = context.kit.web3.utils.toWei(value, 'ether')
+  if (approval.gte(transferValue)) {
+    const receipt = await stableToken.transferFrom(sender, receiver, transferValue).sendAndWaitForReceipt()
+
+    await context.reply(`Transaction succeeded: https://alfajores-blockscout.celo-testnet.org/tx/${receipt.transactionHash}`)
+    return
+  }
+
+  await context.reply(`Approval for the bot was only ${context.kit.web3.utils.fromWei(approval.toString())}, but wanted to transfer ${value}`)
+}
+
+async function escrow(context: Context, command: CommandTip, senderAddress: Address) {
+  const stableToken = await context.kit.contracts.getStableToken()
+  const approval = await stableToken.allowance(senderAddress, context.kit.defaultAccount!)
+  const transferValue = context.kit.web3.utils.toWei(command.value, 'ether')
+
+  if (approval.gte(transferValue)) {
+    const receipt = await stableToken.transferFrom(senderAddress, context.kit.defaultAccount!, transferValue).sendAndWaitForReceipt()
+
+    const escrows = context.database.collection('escrows')
+    await (await escrows.doc(context.commentId)).set({
+      commentId: context.commentId,
+      sender: command.sender,
+      receiver: command.receiver,
+      value: command.value
+    })
+    await context.reply(`@${command.receiver} has not registered a Celo account. Funds are being hold in escrow: ${getBlockscoutURL(receipt.transactionHash)}`)
+    return
+  }
+
+  await context.reply(`Approval for the bot was only ${context.kit.web3.utils.fromWei(approval.toString())}, but wanted to transfer ${command.value}`)
+}
+
 async function handleTip(context: Context, command: CommandTip) {
   console.log('Trying to perform tip:', command)
   const senderAddress = await getCeloAccountForGithubUsername(context, command.sender)
   const recipientAddress = await getCeloAccountForGithubUsername(context, command.receiver)
 
   if (senderAddress.ok && recipientAddress.ok) {
-    const stableToken = await context.kit.contracts.getStableToken()
-    const approval = await stableToken.allowance(senderAddress.result, context.kit.defaultAccount!)
-    const transferValue = context.kit.web3.utils.toWei(command.value, 'ether')
-    console.log('Approval is ', approval)
-    if (approval.gte(transferValue)) {
-      await stableToken.transferFrom(senderAddress.result, recipientAddress.result, transferValue).sendAndWaitForReceipt()
-      console.log('transfered')
-    }
+    await transfer(context, senderAddress.result, recipientAddress.result, command.value)
+  } else if (senderAddress.ok) {
+    await escrow(context, command, senderAddress.result)
   } else {
     console.log("I can't do the transfer")
   }
+}
+
+function getBlockscoutURL(txHash: string) {
+  return `https://alfajores-blockscout.celo-testnet.org/tx/${txHash}`
 }
 
 export async function getIdentifiersForAccount(_account: Address): Promise<string[]> {
@@ -67,6 +105,30 @@ async function handleRegister(context: Context, command: CommandRegister) {
   // TODO: Only add claims as registered in metadata
   await context.database.collection('identifierAccounts').doc(`${command.address}:github-${command.sender}`).set({ account: command.address, identifier: `github://${command.sender}`})
 
+  // TODO: Remove this
+  await handleRedeem(context, command.sender)
+}
+
+async function handleRedeem(context: Context, username: string) {
+  // ToDO: Actually authenticate the user here
+  const address = await getCeloAccountForGithubUsername(context, username)
+
+  if (!address.ok) {
+    return
+  }
+
+  const stableToken = await context.kit.contracts.getStableToken()
+  const escrows = context.database.collection('escrows')
+  const escrowsForUser = await escrows.where('receiver', '==', username).get()
+
+  // TODO: Make this atomic
+  await Promise.all(escrowsForUser.docs.map(async (escrow) => {
+    const receipt = await stableToken.transfer(address.result, context.kit.web3.utils.toWei(escrow.data().value).toString()).sendAndWaitForReceipt()
+
+    context.reply(`Redeemed escrow from comment (${escrow.data().commentId}) for $${escrow.data().value} from @${escrow.data().sender}: ${getBlockscoutURL(receipt.transactionHash)}`)
+
+    await escrow.ref.delete()
+  }))
 }
 
 export const app = (app: Application) => {
@@ -98,13 +160,10 @@ export const app = (app: Application) => {
     const address = privateKeyToAddress(key.privateKey)
     kit.addAccount(key.privateKey)
     kit.defaultAccount = address
-    app.log.info({
-      address,
-      balance: await kit.web3.eth.getBalance(address)
-    })
+
     const result = parseGitHubComment(context.payload.comment)
     if (result.ok) {
-      await handleCommand({ kit, database }, result.result)
+      await handleCommand({ kit, database, reply: (body) => context.github.issues.createComment(context.issue({ body })), commentId: context.id}, result.result)
     } else {
       console.info("Can't parse the command", result.error)
     }
