@@ -107,7 +107,7 @@ async function escrow(
         command.receiver
       } has not registered a Celo account. Funds are being hold in escrow: ${getBlockscoutURL(
         receipt.transactionHash
-      )}`
+      )}. Respond with "@celo-tipbot REDEEM" after claiming your github in metadata.`
     );
     return;
   }
