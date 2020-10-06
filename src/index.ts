@@ -1,5 +1,6 @@
 import { Application } from "probot"; // eslint-disable-line no-unused-vars
-import { Address, ContractKit, newKit } from "@celo/contractkit";
+import { Address, ContractKit, IdentityMetadataWrapper, newKit } from "@celo/contractkit";
+import { verifyGithubClaim } from "@celo/contractkit/lib/identity/claims/github";
 
 import { Command, CommandTip, CommandRegister } from "./command";
 import { parseGitHubComment } from "./parse";
@@ -7,6 +8,8 @@ import { AccountUtils } from "@celo/utils";
 import { privateKeyToAddress } from "@celo/utils/lib/address";
 import * as firebase from "firebase";
 import { Err, Ok, Result } from "@celo/base/lib/result";
+import { isOfType } from "@celo/contractkit/lib/identity/claims/claim";
+import { ClaimTypes } from "@celo/contractkit/lib/identity";
 
 interface OrgConfig {
   host: string;
@@ -25,13 +28,35 @@ async function getCeloAccountForGithubUsername(
   username: string
 ): Promise<Result<Address, Error>> {
   const accounts = await context.getClaimedAccounts(username);
+  const accountsContract = await context.kit.contracts.getAccounts()
+  const verifiedAccounts = await Promise.all(accounts.map(async account => {
+    const metadataURL = await accountsContract.getMetadataURL(account)
+    if (!metadataURL) return null
+    const metadata = await IdentityMetadataWrapper.fetchFromURL(context.kit, metadataURL)
+    const githubClaims = metadata.claims.filter(isOfType(ClaimTypes.GITHUB))
+    const validGithubClaims = await Promise.all(githubClaims.map(async claim => {
+      const validationError = await verifyGithubClaim(context.kit, claim.username, account)
+      if (validationError){
+        console.error('Error validating claim: ', validationError)
+      }
+      if (!validationError && claim.username === username) {
+        return account
+      }
+      return null
+    }))
 
+    if (validGithubClaims.filter(x => x).length > 0) {
+      return validGithubClaims.filter(x => x)[0]
+    }
+    return null
+  }))
 
-  if (accounts.length == 0) {
+  const filteredVerifiedAccounts = verifiedAccounts.filter(x => x)
+  if (filteredVerifiedAccounts.length == 0) {
     return Err(new Error("No accounts found for identifier " + username));
   }
-
-  return Ok(accounts[0]);
+  // @ts-ignore we filtered for nulls
+  return Ok(filteredVerifiedAccounts[0]);
 }
 
 async function handleCommand(context: Context, command: Command) {
@@ -172,6 +197,7 @@ async function handleRedeem(context: Context, username: string) {
   const address = await getCeloAccountForGithubUsername(context, username);
 
   if (!address.ok) {
+    await context.reply(`Could not authenticate Celo account for @${username}`)
     return;
   }
 
