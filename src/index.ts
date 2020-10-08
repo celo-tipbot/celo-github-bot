@@ -248,12 +248,6 @@ export const app = (app: Application) => {
   firebase.initializeApp(firebaseConfig);
 
   const database = firebase.firestore();
-  app.on("issues.opened", async (context) => {
-    const issueComment = context.issue({
-      body: "Thanks for opening this issue!",
-    });
-    await context.github.issues.createComment(issueComment);
-  });
 
   app.on("issue_comment", async (context) => {
     // @ts-ignore
